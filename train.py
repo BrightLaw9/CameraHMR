@@ -22,6 +22,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from yacs.config import CfgNode
 from core.configs import dataset_config
 from core.datasets import DataModule
+from core.datasets.soccer_dataset import SoccerDataModule
 from core.utils.pylogger import get_pylogger
 from core.utils.misc import task_wrapper, log_hyperparameters
 from pytorch_lightning.strategies import DDPStrategy
@@ -49,7 +50,8 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
     save_configs(cfg, dataset_cfg, cfg.paths.output_dir)
 
     # Setup training and validation datasets
-    datamodule = DataModule(cfg, dataset_cfg)
+    # datamodule = DataModule(cfg, dataset_cfg)
+    datamodule = SoccerDataModule(cfg, dataset_cfg)
 
     # Setup model
     if cfg.MODEL.TYPE == 'smpl':

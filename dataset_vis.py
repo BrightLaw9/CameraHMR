@@ -34,6 +34,9 @@ def load_smpl_model(model_folder, gender="neutral", num_betas=10):
 def load_data(npz_path, image_folder, ind):
     data = np.load(npz_path)
     img_path = os.path.join(image_folder, data['imgname'][ind].replace('aic-train', 'aic-train-vitpose'))
+
+    print(img_path)
+    print(data.files)
     return {
         "img_path": img_path,
         "translations": data['trans_cam'][ind],

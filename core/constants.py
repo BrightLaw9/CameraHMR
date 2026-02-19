@@ -1,4 +1,5 @@
 CHECKPOINT_PATH='data/pretrained-models/camerahmr_checkpoint_cleaned.ckpt'
+#CHECKPOINT_PATH="logs/train/runs/train_run1/checkpoints/epoch=104-step=520000.ckpt"
 CHECKPOINT_PATH_SMPLX='data/pretrained-models//bedlam_v1_v2.ckpt'
 CAM_MODEL_CKPT='data/pretrained-models/cam_model_cleaned.ckpt'
 DENSEKP_CKPT='data/pretrained-models/densekp.ckpt'
@@ -41,7 +42,8 @@ JOINT_REGRESSOR_TRAIN_EXTRA = 'data/train-eval-utils/J_regressor_extra.npy'
 SMPLX2SMPL='data/train-eval-utils/smplx2smpl.pkl'
 DOWNSAMPLE_MAT='data/train-eval-utils/downsample_mat.pkl'
 REGRESSOR_H36M='data/train-eval-utils/J_regressor_h36m.npy'
-SMPLX_MODEL_DIR='data/models/smplx_neutral_head/models_lockedhead/smplx'
+#SMPLX_MODEL_DIR='data/models/smplx_neutral_head/models_lockedhead/smplx'
+SMPLX_MODEL_DIR='data/models/SMPLX'
 SMPL_MODEL_DIR='data/models/SMPL'
 VITPOSE_BACKBONE='data/train-eval-utils/vitpose_backbone.pth'
 JOINT_NAMES = [

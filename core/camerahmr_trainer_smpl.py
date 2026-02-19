@@ -195,8 +195,10 @@ class CameraHMR(pl.LightningModule):
         
         joints2d = perspective_projection(
             output['pred_keypoints_3d'],
-            rotation=torch.eye(3, device=device).unsqueeze(0).expand(batch_size, -1, -1),
-            translation=cam_t,
+            # rotation=torch.eye(3, device=device).unsqueeze(0).expand(batch_size, -1, -1),
+            # translation=cam_t,
+            rotation=batch['rotation'],
+            translation=batch['translation'],
             cam_intrinsics=batch['cam_int'],
         )
         if self.cfg.LOSS_WEIGHTS['VERTS2D'] or self.cfg.LOSS_WEIGHTS['VERTS2D_CROP'] or self.cfg.LOSS_WEIGHTS['VERTS_2D_NORM']:
@@ -569,28 +571,30 @@ class CameraHMR(pl.LightningModule):
 
         joints2d = perspective_projection(
             output['pred_keypoints_3d'],
-            rotation=torch.eye(3, device=device).unsqueeze(0).expand(batch_size, -1, -1),
-            translation=cam_t,
+            # rotation=torch.eye(3, device=device).unsqueeze(0).expand(batch_size, -1, -1),
+            # translation=cam_t,
+            rotation=batch['rotation'],
+            translation=batch['translation'],
             cam_intrinsics=batch['cam_int'],
         )
 
-        if batch['keypoints_2d'].shape[1]>=17:
-            pred_kp = trans_points2d_parallel(joints2d, batch['_trans'])
-            pred_kp = pred_kp / self.cfg.MODEL.IMAGE_SIZE - 0.5
-            gt_kp = batch['keypoints_2d']
-            mask = gt_kp[:,:,2]>0
-            zeros_to_insert = torch.zeros((gt_kp.shape[0], 1, 3)).cuda()
-            if '3dpw' in dataset_names[0]:
-                gt_kp = torch.cat((gt_kp[:, :9, :], zeros_to_insert, gt_kp[:, 9:, :]), dim=1)    
-                pck1, avgpck1, _ = (pck_accuracy(pred_kp[:,:18,:2],gt_kp[:,:18,:2],mask[:,:18],0.05))
-                pck2, avgpck2, _ = (pck_accuracy(pred_kp[:,:18,:2],gt_kp[:,:18,:2],mask[:,:18],0.1))
-            else: 
-                pck1, avgpck1, _ = (pck_accuracy(pred_kp[:,:18,:2],gt_kp[:,:18,:2],mask[:,:18],0.05))
-                pck2, avgpck2, _ = (pck_accuracy(pred_kp[:,:18,:2],gt_kp[:,:18,:2],mask[:,:18],0.1))
+        # if batch['keypoints_2d'].shape[1]>=17:
+        #     pred_kp = trans_points2d_parallel(joints2d, batch['_trans'])
+        #     pred_kp = pred_kp / self.cfg.MODEL.IMAGE_SIZE - 0.5
+        #     gt_kp = batch['keypoints_2d']
+        #     mask = gt_kp[:,:,2]>0
+        #     zeros_to_insert = torch.zeros((gt_kp.shape[0], 1, 3)).cuda()
+        #     if '3dpw' in dataset_names[0]:
+        #         gt_kp = torch.cat((gt_kp[:, :9, :], zeros_to_insert, gt_kp[:, 9:, :]), dim=1)    
+        #         pck1, avgpck1, _ = (pck_accuracy(pred_kp[:,:18,:2],gt_kp[:,:18,:2],mask[:,:18],0.05))
+        #         pck2, avgpck2, _ = (pck_accuracy(pred_kp[:,:18,:2],gt_kp[:,:18,:2],mask[:,:18],0.1))
+        #     else: 
+        #         pck1, avgpck1, _ = (pck_accuracy(pred_kp[:,:18,:2],gt_kp[:,:18,:2],mask[:,:18],0.05))
+        #         pck2, avgpck2, _ = (pck_accuracy(pred_kp[:,:18,:2],gt_kp[:,:18,:2],mask[:,:18],0.1))
 
-        else:
-            pck1 = torch.zeros(joints2d.shape)
-            pck2 = torch.zeros(joints2d.shape)
+        # else:
+        pck1 = torch.zeros(joints2d.shape)
+        pck2 = torch.zeros(joints2d.shape)
 
         # Absolute error (MPJPE)
         error = torch.sqrt(((pred_keypoints_3d - gt_keypoints_3d) ** 2).sum(dim=-1))

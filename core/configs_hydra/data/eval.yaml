@@ -2,5 +2,6 @@
 
 DATASETS:
   DATASETS_AND_RATIOS: 
-  VAL_DATASETS: emdb-smpl_3dpw-test-cam-smpl_spec-test-smpl_rich-smplx_coco-val-smpl
+  # VAL_DATASETS: emdb-smpl_3dpw-test-cam-smpl_spec-test-smpl_rich-smplx_coco-val-smpl
+  VAL_DATASETS: spec-mtp-test-smpl_coco-val-smpl_emdb-smpl
 
