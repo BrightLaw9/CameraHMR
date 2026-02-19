@@ -150,11 +150,11 @@ class DatasetTrain(Dataset):
                                       )
         new_center = np.array([cx, cy])
         img_patch = img_patch_rgba[:3,:,:]
-        item['cam_int'] = np.array(self.cam_int[index]).astype(np.float32)
+        item['cam_int'] = np.array(self.cam_int[frame]).astype(np.float32)
         item['img_disp'] = img_patch_cv
         item['img'] = img_patch
-        item['keypoints_2d'] = keypoints_2d.astype(np.float32)
-        item['orig_keypoints_2d'] = orig_keypoints_2d
+        # item['keypoints_2d'] = keypoints_2d.astype(np.float32)
+        # item['orig_keypoints_2d'] = orig_keypoints_2d
         item['box_center'] = new_center
         item['box_size'] = bbox_w * scale_aug
         item['img_size'] = 1.0 * img_size.copy()
