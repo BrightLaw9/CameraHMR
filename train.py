@@ -122,3 +122,6 @@ def main(cfg: DictConfig) -> Optional[float]:
 
 if __name__ == "__main__":
     main()
+
+# Run the command
+# python train.py data=soccer_train experiment=camerahmr exp_name=soccer_train

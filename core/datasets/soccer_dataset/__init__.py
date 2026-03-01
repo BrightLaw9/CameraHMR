@@ -32,16 +32,16 @@ class SoccerDataModule(pl.LightningDataModule):
             dataset_names = self.cfg.DATASETS.DATASETS_AND_RATIOS.split('_')
             dataset_list = []
             for ds in dataset_names:
-                if ds == "worldpose":
-                    img_dir = DATASET_FOLDERS[ds]
-                    npz_dir = DATASET_FILES[is_train][ds]
-                    for filename in os.listdir(npz_dir + "poses/"):
-                        if filename.endswith(".npz"):
-                            poses_path = os.path.join(npz_dir + "poses/", filename)
-                            cameras_path = os.path.join(npz_dir + "cameras/", filename)
-                            dataset_list.append(DatasetTrain(self.cfg, ds, img_dir, filename.replace(".npz", ""), poses_path, cameras_path))
-                # else:
-                #     dataset_list.append(DatasetTrain(self.cfg, ds))
+                # directory to training image frames
+                img_dir = DATASET_FOLDERS[ds]
+                # Expects a directory containing training data (subdirectories poses, cameras with npz files)
+                npz_dir = DATASET_FILES[is_train][ds]
+                for filename in os.listdir(npz_dir + "poses/"):
+                    if filename.endswith(".npz"):
+                        poses_path = os.path.join(npz_dir + "poses/", filename)
+                        cameras_path = os.path.join(npz_dir + "cameras/", filename)
+                        dataset_list.append(DatasetTrain(self.cfg, ds, img_dir, filename.replace(".npz", ""), poses_path, cameras_path))
+
             train_ds = torch.utils.data.ConcatDataset(dataset_list)
             return train_ds
         else:
@@ -51,9 +51,20 @@ class SoccerDataModule(pl.LightningDataModule):
         # if self.cfg.MODEL.TYPE == 'smplx':
         #     from .dataset_val_hands import DatasetVal
         # else:
-        from .dataset_val import DatasetVal
+        # from .dataset_val import DatasetVal
         dataset_names = self.cfg.DATASETS.VAL_DATASETS.split('_')
-        dataset_list = [DatasetVal(self.cfg, ds, is_train=False) for ds in dataset_names]
+        from .dataset_train import DatasetTrain
+        is_train = False
+        for ds in dataset_names:
+            img_dir = DATASET_FOLDERS[ds]
+            npz_dir = DATASET_FILES[is_train][ds]
+            dataset_list = []
+            for filename in os.listdir(npz_dir + "poses/"):
+                if filename.endswith(".npz"):
+                    poses_path = os.path.join(npz_dir + "poses/", filename)
+                    cameras_path = os.path.join(npz_dir + "cameras/", filename)
+                    dataset_list.append(DatasetTrain(self.cfg, ds, img_dir, filename.replace(".npz", ""), poses_path, cameras_path))
+        # dataset_list = [DatasetVal(self.cfg, ds, is_train=False) for ds in dataset_names]
         return dataset_list
 
     def train_dataloader(self):

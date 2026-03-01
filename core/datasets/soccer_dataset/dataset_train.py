@@ -87,36 +87,61 @@ class DatasetTrain(Dataset):
         #     self.trans_cam = None
         log.info(f'Loaded {game_name} dataset, num players {self.num_players}, num frames {self.num_frames}')
 
-    def get_frame_and_player(index, num_frames):
+    def get_frame_and_player(self, index, num_frames):
         # Player, frame
-        return index // num_frames, index % num_frames 
+        return index // num_frames, index % num_frames
+    
+    def project_points(self, X_world, R, t, K):
+        # World → Camera
+        X_cam = (R @ X_world.T).T + t
+
+        X = X_cam[:, 0]
+        Y = X_cam[:, 1]
+        Z = X_cam[:, 2]
+
+        # Perspective divide
+        x = X / Z
+        y = Y / Z
+
+        # Apply intrinsics
+        u = K[0,0] * x + K[0,2]
+        v = K[1,1] * y + K[1,2]
+
+        return u, v
 
     def __getitem__(self, index):
         player, frame = self.get_frame_and_player(index, self.body_pose.shape[1])
         item = {}
-        scale = self.scale.copy()
+        scale = self.scale
         center = self.center[player][frame].copy()
         
         # ???
         # keypoints_2d = self.keypoints[index].copy()
         # orig_keypoints_2d = self.keypoints[index].copy()
         
-        center_x = center[0]
-        center_y = center[1]
+        # center_x = center[0]
+        # center_y = center[1]
+        camera_rot = self.camera_data['R']
+        camera_trans = self.camera_data['t']
+        world_coords = np.array(camera_trans) + np.array(center)
+        center_x, center_y = self.project_points(world_coords, camera_rot, camera_trans, self.camera_data['K'])
+        print("Center x, center y: ", center_x, center_y)
         bbox_size = expand_to_aspect_ratio(scale*200, target_aspect_ratio=self.BBOX_SHAPE).max()
+        # Will give a bounding box size of 200px
+        print(f"Bounding box size: {bbox_size}")
         if bbox_size < 1:
             #Todo raise proper error
             breakpoint()
 
         augm_config = copy.deepcopy(self.cfg.DATASETS.CONFIG)
-        imgname = None
-        # imgname = os.path.join(self.img_dir, self.imgname_prefix, f"{frame}.jpg")
-        # cv_img = cv2.imread(imgname, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
-        # cv_img = cv_img[:, :, ::-1]
-        # aspect_ratio, img_full_resized = resize_image(cv_img, 256)
-        # img_full_resized = np.transpose(img_full_resized.astype('float32'),
-        #                 (2, 0, 1))/255.0
-        # item['img_full_resized'] = self.normalize_img(torch.from_numpy(img_full_resized).float())
+        # imgname = None
+        imgname = os.path.join(self.img_dir, self.imgname_prefix, f"{frame:06d}.jpg")
+        cv_img = cv2.imread(imgname, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
+        cv_img = cv_img[:, :, ::-1]
+        aspect_ratio, img_full_resized = resize_image(cv_img, 256)
+        img_full_resized = np.transpose(img_full_resized.astype('float32'),
+                        (2, 0, 1))/255.0
+        item['img_full_resized'] = self.normalize_img(torch.from_numpy(img_full_resized).float())
 
         item['pose'] = self.body_pose[player][frame]
         item['betas'] = self.betas[player]
@@ -127,8 +152,12 @@ class DatasetTrain(Dataset):
                     }
         item['smpl_params'] = smpl_params
         item['translation'] = self.cam_ext[frame][:, 3]
-        item['rotation'] = self.cam_ext[frame][:, :3]
 
+        item['rotation'] = self.cam_ext[frame][:, :3]
+        
+
+        ## TODO: Augmentations have cropping logic - however, we don't have scaling factor - we only have depth with respect to camera
+        # Given in field coordinates
         # if self.trans_cam:
         #     item['translation'][:3] += self.trans_cam[index]
         img_patch_rgba = None
@@ -142,7 +171,9 @@ class DatasetTrain(Dataset):
                                       keypoints_2d,
                                       FLIP_KEYPOINT_PERMUTATION,
                                       self.IMG_SIZE, self.IMG_SIZE,
-                                      self.MEAN, self.STD, self.is_train, augm_config,
+                                      self.MEAN, self.STD, 
+                                        False, # do_augment
+                                    augm_config,
                                       is_bgr=True, return_trans=True,
                                       use_skimage_antialias=self.use_skimage_antialias,
                                       border_mode=self.border_mode,

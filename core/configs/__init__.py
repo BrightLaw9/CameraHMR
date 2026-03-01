@@ -19,7 +19,8 @@ DATASET_FOLDERS = {
     'mpii-train':  os.path.join(base_dir, 'data/training-images/MPII-pose'),
     'coco-train':  os.path.join(base_dir, 'data/training-images/COCO'),
 
-    'worldpose': os.path.join(base_dir, 'data/WorldPoseDataset/outputs/'),
+    'worldpose-train': os.path.join(base_dir, 'data/WorldPoseDataset/train/outputs/'),
+    'worldpose-test': os.path.join(base_dir, 'data/WorldPoseDataset/val/outputs/'),
 
     #BEDLAM (SMPL)
     # 'agora-body-bbox44': os.path.join(base_dir, 'data/training-images/images'),
@@ -174,6 +175,7 @@ DATASET_FILES = [
         'spec-test-smpl': os.path.join(base_dir, 'data/test-labels/spec_test.npz'),
         'spec-mtp-test-smpl': os.path.join(base_dir, 'data/test-labels/spec_mtp_test.npz'),
         'coco-val-smpl': os.path.join(base_dir, 'data/test-labels/coco_val.npz'),
+        'worldpose-test': os.path.join(base_dir, 'data/WorldPoseDataset/val/'),
     },
     {
         'aic': os.path.join(base_dir, 'data//training-labels/aic-release.npz'),
@@ -183,7 +185,7 @@ DATASET_FILES = [
         'mpii-train': os.path.join(base_dir, 'data/training-labels/mpii-release.npz'),
         
         # Only provide the directory to load all the npz files
-        'worldpose': os.path.join(base_dir, 'data/WorldPoseDataset/')
+        'worldpose-train': os.path.join(base_dir, 'data/WorldPoseDataset/train/'),
         # CameraHMR
         # BEDLAM1 SMPL
         # 'agora-body-bbox44': os.path.join(base_dir, 'data/training-labels/bedlam-labels/agora.npz'),

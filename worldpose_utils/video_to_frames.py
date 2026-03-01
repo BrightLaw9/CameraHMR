@@ -158,11 +158,11 @@ def process_clip(clip_name):
     smpl_seqs = create_smpl_sequences(smpl_params, colors=colors, post_fk_func=post_fk_func)
 
     # Setup camera and billboard
-    camera = OpenCVCamera(camera_params["K"], camera_params["Rt"], 1920, 1080, viewer=viewer, name="Overlay")
+    # camera = OpenCVCamera(camera_params["K"], camera_params["Rt"], 1920, 1080, viewer=viewer, name="Overlay")
     ## create a tmp folder and convert video to images
-    img_folder = Path(f"outputs/{clip_name}")
+    img_folder = Path(f"../data/WorldPoseDataset/outputs/{clip_name}")
     convert_video_to_images(video_path, img_folder)
-    billboard = create_billboard(camera, img_folder, 200, make_draw_func(camera_params))
+    # billboard = create_billboard(camera, img_folder, 200, make_draw_func(camera_params))
     # viewer.scene.add(billboard)
     # viewer.scene.add(camera)
 
@@ -203,7 +203,10 @@ if __name__ == "__main__":
     # Setup viewer and load data
     # viewer = Viewer(size=(1920, 1080))
     # clip_name = args.sequence
+    processed = [s for s in os.listdir('../data/WorldPoseDataset/outputs/')]
+    print(processed)
     for clip in clips:
         print(clip)
-        #process_clip(clip)
+        if clip not in processed:
+            process_clip(clip)
     
