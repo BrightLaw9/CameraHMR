@@ -195,10 +195,10 @@ class CameraHMR(pl.LightningModule):
         
         joints2d = perspective_projection(
             output['pred_keypoints_3d'],
-            # rotation=torch.eye(3, device=device).unsqueeze(0).expand(batch_size, -1, -1),
-            # translation=cam_t,
-            rotation=batch['rotation'],
-            translation=batch['translation'],
+            rotation=torch.eye(3, device=device).unsqueeze(0).expand(batch_size, -1, -1),
+            translation=cam_t,
+            # rotation=batch['rotation'],
+            # translation=batch['translation'],
             cam_intrinsics=batch['cam_int'],
         )
         if self.cfg.LOSS_WEIGHTS['VERTS2D'] or self.cfg.LOSS_WEIGHTS['VERTS2D_CROP'] or self.cfg.LOSS_WEIGHTS['VERTS_2D_NORM']:

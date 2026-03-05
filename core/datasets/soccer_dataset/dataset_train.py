@@ -35,6 +35,7 @@ class DatasetTrain(Dataset):
         self.img_dir = img_dir
         self.pose_data = np.load(poses_npz_path, allow_pickle=True)
         self.camera_data = np.load(camera_npz_path, allow_pickle=True)
+        print(self.camera_data)
         
         # self.img_dir = DATASET_FOLDERS[dataset] 
         # self.data = np.load(DATASET_FILES[is_train][dataset], allow_pickle=True)
@@ -75,6 +76,8 @@ class DatasetTrain(Dataset):
         self.cam_ext[:, :3, :3] = self.camera_data['R']
         self.cam_ext[:, :3, 3] = self.camera_data['t']
 
+        self.cam_distort = self.camera_data['k']
+
         #Only for BEDLAM and AGORA
         # if 'trans_cam' in self.data:
         #     self.trans_cam = self.data['trans_cam']
@@ -91,23 +94,46 @@ class DatasetTrain(Dataset):
         # Player, frame
         return index // num_frames, index % num_frames
     
-    def project_points(self, X_world, R, t, K):
-        # World → Camera
-        X_cam = (R @ X_world.T).T + t
+    # def project_points(self, X_world, R, t, K):
+    #     # World → Camera
+    #     X_cam = (R @ X_world.T).T + t
 
-        X = X_cam[:, 0]
-        Y = X_cam[:, 1]
-        Z = X_cam[:, 2]
+    #     print("Camera: ", X_cam)
+    #     X = X_cam[0]
+    #     Y = X_cam[1]
+    #     Z = X_cam[2]
 
-        # Perspective divide
-        x = X / Z
-        y = Y / Z
+    #     # Perspective divide
+    #     x = X / Z
+    #     y = Y / Z
 
-        # Apply intrinsics
-        u = K[0,0] * x + K[0,2]
-        v = K[1,1] * y + K[1,2]
+    #     # Apply intrinsics
+    #     u = K[0,0] * x + K[0,2] # focal point x is K[0, 0], cx is K[0,2]
+    #     v = K[1,1] * y + K[1,2] # focal point y is K[1, 1], cy is K[1,2]
 
-        return u, v
+    #     return u, v
+
+    def project_points(self, obj_pts, R, t, f, principal_points, k, *args, **kwargs):
+        # world to camera transformation
+        pts_c = obj_pts @ R.T + t
+        img_pts = pts_c[..., :2] / pts_c[..., 2:]
+
+        # here we add a small hack to make sure the points are in the image
+        r = np.square(img_pts).sum(-1, keepdims=True)
+
+        # we assume the distortion will only have minor impact on the projection
+        r = np.clip(r, 0, 0.5 / min(max(np.abs(k).max(), 1), 1))
+
+        # if k.shape[0] <= 2:
+        #     img_pts = img_pts * (1 + k[0] * r + k[1] * np.square(r))
+        # else:
+        #     img_pts = img_pts * (1 + k[0] * r + k[1] * np.square(r) + k[2] * np.power(r, 3))
+        d = np.ones_like(r)
+        for i in range(0, k.shape[0]):
+            d = d + k[i] * np.power(r, i + 1)
+        img_pts = img_pts * d
+        img_pts = img_pts * f + principal_points[None, :]
+        return img_pts
 
     def __getitem__(self, index):
         player, frame = self.get_frame_and_player(index, self.body_pose.shape[1])
@@ -121,12 +147,25 @@ class DatasetTrain(Dataset):
         
         # center_x = center[0]
         # center_y = center[1]
-        camera_rot = self.camera_data['R']
-        camera_trans = self.camera_data['t']
-        world_coords = np.array(camera_trans) + np.array(center)
-        center_x, center_y = self.project_points(world_coords, camera_rot, camera_trans, self.camera_data['K'])
+        camera_rot = self.cam_ext[frame][:, :3]
+        camera_trans = self.cam_ext[frame][:, 3]
+        # print(self.cam_ext)
+        world_coords = np.array(center)
+        calib = {
+            "R": camera_rot,
+            "t": camera_trans,
+            "k": self.cam_distort[frame],
+            "f": self.cam_int[frame][0, 0],
+            "principal_points": self.cam_int[frame][:2, 2],
+        }
+        #scenter_x, center_y = self.project_points(world_coords, camera_rot, camera_trans, self.cam_int[frame])
+        projection = self.project_points(world_coords, **calib)
+        print(projection)
+        center_x = projection[0][0]
+        center_y = projection[0][1]
         print("Center x, center y: ", center_x, center_y)
-        bbox_size = expand_to_aspect_ratio(scale*200, target_aspect_ratio=self.BBOX_SHAPE).max()
+        # bbox_size = expand_to_aspect_ratio(scale*200, target_aspect_ratio=self.BBOX_SHAPE).max()
+        bbox_size = 200 # Placeholder, used in augmenting image but turned off
         # Will give a bounding box size of 200px
         print(f"Bounding box size: {bbox_size}")
         if bbox_size < 1:
@@ -168,7 +207,7 @@ class DatasetTrain(Dataset):
         img_size, cx, cy, bbox_w, bbox_h, trans, scale_aug = get_example(imgname,
                                       center_x, center_y,
                                       bbox_size, bbox_size,
-                                      keypoints_2d,
+                                      None, #keypoints_2d,
                                       FLIP_KEYPOINT_PERMUTATION,
                                       self.IMG_SIZE, self.IMG_SIZE,
                                       self.MEAN, self.STD, 
@@ -193,6 +232,7 @@ class DatasetTrain(Dataset):
         item['_trans'] = trans
         item['imgname'] = imgname
         item['dataset'] = self.dataset
+        item['gender']  = 0
         return item
 
     def __len__(self):

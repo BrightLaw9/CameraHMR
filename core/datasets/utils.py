@@ -727,8 +727,8 @@ def get_example(img_path: str|np.ndarray, center_x: float, center_y: float,
         if mean is not None and std is not None:
             img_patch[n_c, :, :] = (img_patch[n_c, :, :] - mean[n_c]) / std[n_c]
 
-    keypoints_2d[:, :2] = trans_points2d_parallel(keypoints_2d[:, 0:2], trans)
-    keypoints_2d[:, :-1] = keypoints_2d[:, :-1] / patch_width - 0.5
+    # keypoints_2d[:, :2] = trans_points2d_parallel(keypoints_2d[:, 0:2], trans)
+    # keypoints_2d[:, :-1] = keypoints_2d[:, :-1] / patch_width - 0.5
 
     if not return_trans:
         return img_patch, img_patch_cv, keypoints_2d, img_size, center_x, center_y, width, height, scale
