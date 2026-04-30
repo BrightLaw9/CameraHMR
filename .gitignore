@@ -3,3 +3,4 @@ data/
 logs/
 *_logs/
 __pycache__/
+test_get_output_mesh/

@@ -50,7 +50,7 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
     save_configs(cfg, dataset_cfg, cfg.paths.output_dir)
 
     # Setup training and validation datasets
-    # datamodule = DataModule(cfg, dataset_cfg)
+    #datamodule = DataModule(cfg, dataset_cfg)
     datamodule = SoccerDataModule(cfg, dataset_cfg)
 
     # Setup model

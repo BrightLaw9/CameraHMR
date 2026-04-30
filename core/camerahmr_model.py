@@ -50,6 +50,7 @@ class CameraHMR(pl.LightningModule):
         if self.model_type == 'smplx':
             pred_smpl_params['left_hand_pose'] = pred_smpl_params['left_hand_pose'].view(batch_size, -1, 3, 3)
             pred_smpl_params['right_hand_pose'] = pred_smpl_params['right_hand_pose'].view(batch_size, -1, 3, 3)
-
-
+        
+        print("PRED SMPL", pred_smpl_params)
+        print("PRED CAM", pred_cam)
         return pred_smpl_params, pred_cam, fl_h

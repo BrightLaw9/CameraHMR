@@ -106,6 +106,9 @@ class HumanMeshEstimator:
         smpl_output = self.body_model(**{k: v.float() for k, v in params.items()})
         pred_keypoints_3d = smpl_output.joints
         pred_vertices = smpl_output.vertices
+        # for b in pred_vertices:
+        #     for v in b:
+        #         v[2] *= 100
         img_h, img_w = batch['img_size'][0]
         cam_trans = self.convert_to_full_img_cam(
             pare_cam=pred_cam,
@@ -149,6 +152,8 @@ class HumanMeshEstimator:
         # Detect humans in the image
         det_out = self.detector(img_cv2)
         det_instances = det_out['instances']
+
+        print(det_instances)
         valid_idx = (det_instances.pred_classes == 0) & (det_instances.scores > 0.5)
         boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
         bbox_scale = (boxes[:, 2:4] - boxes[:, 0:2]) / 200.0 
@@ -162,6 +167,7 @@ class HumanMeshEstimator:
         for batch in dataloader:
             batch = recursive_to(batch, self.device)
             img_h, img_w = batch['img_size'][0]
+
             with torch.no_grad():
                 out_smpl_params, out_cam, focal_length_ = self.model(batch)
 
@@ -174,13 +180,13 @@ class HumanMeshEstimator:
             # Render overlay
             focal_length = (focal_length_[0], focal_length_[0])
             pred_vertices_array = (output_vertices + output_cam_trans.unsqueeze(1)).detach().cpu().numpy()
+            print(pred_vertices_array)
             renderer = Renderer(focal_length=focal_length[0], img_w=img_w, img_h=img_h, faces=self.body_model.faces, same_mesh_color=True)
             front_view = renderer.render_front_view(pred_vertices_array, bg_img_rgb=img_cv2.copy())
             final_img = front_view
             # Write overlay
             cv2.imwrite(overlay_fname, final_img)
             renderer.delete()
-
 
     def run_on_images(self, image_folder, out_folder):
         if not os.path.exists(out_folder):

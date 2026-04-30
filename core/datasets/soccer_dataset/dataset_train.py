@@ -10,15 +10,20 @@ from ...utils.pylogger import get_pylogger
 from ...constants import FLIP_KEYPOINT_PERMUTATION, NUM_JOINTS, NUM_BETAS, NUM_PARAMS_SMPL
 from ..utils import expand_to_aspect_ratio, get_example, resize_image
 from torchvision.transforms import Normalize
+import random
+
+import trimesh
+from core.utils.renderer_pyrd import Renderer
+
+
 log = get_pylogger(__name__)
 
 
 class DatasetTrain(Dataset):
-    def __init__(self, cfg, dataset, img_dir, game_name, poses_npz_path, camera_npz_path, is_train=True):
+    def __init__(self, cfg, dataset, img_dir, game_name, poses_npz_path, camera_npz_path):
         super(DatasetTrain, self).__init__()
 
         self.dataset = dataset
-        self.is_train = is_train
         self.cfg = cfg
         self.IMG_SIZE = cfg.MODEL.IMAGE_SIZE
         self.BBOX_SHAPE = cfg.MODEL.get('BBOX_SHAPE', None)
@@ -35,7 +40,7 @@ class DatasetTrain(Dataset):
         self.img_dir = img_dir
         self.pose_data = np.load(poses_npz_path, allow_pickle=True)
         self.camera_data = np.load(camera_npz_path, allow_pickle=True)
-        print(self.camera_data)
+        # print(self.camera_data)
         
         # self.img_dir = DATASET_FOLDERS[dataset] 
         # self.data = np.load(DATASET_FILES[is_train][dataset], allow_pickle=True)
@@ -88,6 +93,13 @@ class DatasetTrain(Dataset):
         #     self.trans_cam = self.camera_data['t']
         # else:
         #     self.trans_cam = None
+        
+        self.device = (torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu'))
+
+        from core.constants import SMPL_MODEL_PATH
+        import smplx
+        self.body_model = smplx.SMPLLayer(model_path=SMPL_MODEL_PATH, num_betas=NUM_BETAS).to(self.device)
+        
         log.info(f'Loaded {game_name} dataset, num players {self.num_players}, num frames {self.num_frames}')
 
     def get_frame_and_player(self, index, num_frames):
@@ -135,11 +147,55 @@ class DatasetTrain(Dataset):
         img_pts = img_pts * f + principal_points[None, :]
         return img_pts
 
+    # def get_output_mesh(self, params, cam_trans):
+    #     print(params)
+    #     smpl_output = self.body_model(**{k: v for k, v in params.items()})
+    #     pred_keypoints_3d = smpl_output.joints
+    #     pred_vertices = smpl_output.vertices
+
+    #     return pred_vertices, pred_keypoints_3d, cam_trans
+
+
+    # def view_ground_truth(self, f, i, img_path, smpl_params, cam_trans, img_w, img_h, output_img_folder="./test_get_output_mesh/out/"):
+    #     img_cv2 = cv2.imread(str(img_path))
+    #     img_cv2 = cv2.cvtColor(img_cv2, cv2.COLOR_BGR2RGB)
+
+    #     fname, img_ext = os.path.splitext(os.path.basename(img_path))
+    #     overlay_fname = os.path.join(output_img_folder, f'{os.path.basename(fname)}_{i:06d}{img_ext}')
+    #     mesh_fname = os.path.join(output_img_folder, f'{os.path.basename(fname)}_{i:06d}.obj')
+
+
+    #     output_vertices, output_joints, output_cam_trans = self.get_output_mesh(smpl_params, cam_trans)
+
+    #     mesh = trimesh.Trimesh(output_vertices[0].cpu().numpy() , self.body_model.faces,
+    #                     process=False)
+    #     mesh.export(mesh_fname)
+
+    #     # Render overlay
+    #     focal_length = (f[0], f[0])
+    #     pred_vertices_array = (output_vertices + output_cam_trans.unsqueeze(1)).detach().cpu().numpy()
+    #     print(pred_vertices_array)
+    #     renderer = Renderer(focal_length=focal_length[0], img_w=img_w, img_h=img_h, faces=self.body_model.faces, same_mesh_color=True)
+    #     front_view = renderer.render_front_view(pred_vertices_array, bg_img_rgb=img_cv2.copy())
+    #     final_img = front_view
+    #     # Write overlay
+    #     cv2.imwrite(overlay_fname, final_img)
+    #     renderer.delete()
+
+
     def __getitem__(self, index):
         player, frame = self.get_frame_and_player(index, self.body_pose.shape[1])
         item = {}
         scale = self.scale
         center = self.center[player][frame].copy()
+
+        num_players = self.body_pose.shape[0]
+        num_frames = self.body_pose.shape[1]
+        
+        while (np.isnan(np.array(center)).any()):
+            player = random.randint(0, num_players - 1)
+            frame = random.randint(0, num_frames - 1)
+            center = self.center[player][frame].copy()
         
         # ???
         # keypoints_2d = self.keypoints[index].copy()
@@ -158,16 +214,18 @@ class DatasetTrain(Dataset):
             "f": self.cam_int[frame][0, 0],
             "principal_points": self.cam_int[frame][:2, 2],
         }
+        # print("world coords", world_coords)
+        # print("Calib", calib)
         #scenter_x, center_y = self.project_points(world_coords, camera_rot, camera_trans, self.cam_int[frame])
         projection = self.project_points(world_coords, **calib)
-        print(projection)
+        # print(projection)
         center_x = projection[0][0]
         center_y = projection[0][1]
-        print("Center x, center y: ", center_x, center_y)
+        # print("Center x, center y: ", center_x, center_y)
         # bbox_size = expand_to_aspect_ratio(scale*200, target_aspect_ratio=self.BBOX_SHAPE).max()
         bbox_size = 200 # Placeholder, used in augmenting image but turned off
         # Will give a bounding box size of 200px
-        print(f"Bounding box size: {bbox_size}")
+        # print(f"Bounding box size: {bbox_size}")
         if bbox_size < 1:
             #Todo raise proper error
             breakpoint()
@@ -175,6 +233,7 @@ class DatasetTrain(Dataset):
         augm_config = copy.deepcopy(self.cfg.DATASETS.CONFIG)
         # imgname = None
         imgname = os.path.join(self.img_dir, self.imgname_prefix, f"{frame:06d}.jpg")
+
         cv_img = cv2.imread(imgname, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
         cv_img = cv_img[:, :, ::-1]
         aspect_ratio, img_full_resized = resize_image(cv_img, 256)
@@ -190,7 +249,12 @@ class DatasetTrain(Dataset):
                     'betas': self.betas[player].astype(np.float32)
                     }
         item['smpl_params'] = smpl_params
+
+        # x is left and right (left is negative)
+        # y is depth (deeper is more negative)
+        # z is up and down (up gets more positive - 80 is about 3/4 of image)
         item['translation'] = self.cam_ext[frame][:, 3]
+        # item['translation'] = center
 
         item['rotation'] = self.cam_ext[frame][:, :3]
         
@@ -223,6 +287,7 @@ class DatasetTrain(Dataset):
         item['cam_int'] = np.array(self.cam_int[frame]).astype(np.float32)
         item['img_disp'] = img_patch_cv
         item['img'] = img_patch
+        # print("Image: ", img_patch)
         # item['keypoints_2d'] = keypoints_2d.astype(np.float32)
         # item['orig_keypoints_2d'] = orig_keypoints_2d
         item['box_center'] = new_center
@@ -233,11 +298,15 @@ class DatasetTrain(Dataset):
         item['imgname'] = imgname
         item['dataset'] = self.dataset
         item['gender']  = 0
+
+        # img_h, img_w = item['img_size']
+
+        # print(f"Viewing ground truth {index}")
+        # self.view_ground_truth(item['cam_int'][0, 0], index, imgname, item['smpl_params'], item['translation'], img_w, img_h)
         return item
 
     def __len__(self):
         num_players = self.body_pose.shape[0]
         num_frames = self.body_pose.shape[1]
         return int(num_frames) * int(num_players)
-        
        

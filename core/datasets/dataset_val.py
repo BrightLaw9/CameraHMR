@@ -202,6 +202,12 @@ class DatasetVal(Dataset):
             gt_vertices = gt_smpl_out.vertices.detach()  
             item['keypoints_3d'] = torch.matmul(model.J_regressor, gt_vertices[0])
             item['vertices'] = gt_vertices[0].float()
+
+            # print("SMPL Params Val: ")
+            # print(item['smpl_params'])
+
+            # print("Vertices")
+            # print(item['vertices'])
         return item
 
     def __len__(self):

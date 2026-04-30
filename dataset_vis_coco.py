@@ -10,14 +10,11 @@ from core.utils.renderer_pyrd import Renderer
 
 def make_parser():
     parser = argparse.ArgumentParser(description='CameraHMR dataset visualization')
-    parser.add_argument("--image_folder", type=str, default="data/WorldPoseDataset/train/outputs/ARG_CRO_220001/",
-                        # default='data/training-images',
+    parser.add_argument("--image_folder", type=str, default='data/training-images/COCO/',
         help="Path to input image folder.")
     parser.add_argument("--output_folder", type=str, default='./test_get_output_mesh/out/',
         help="Path to folder output folder.")
-    parser.add_argument("--npz_path", type=str, default='data/WorldPoseDataset/train/poses/ARG_CRO_220001.npz',
-        help="Path to folder output folder")
-    parser.add_argument("--camera_npz_path", type=str, default='data/WorldPoseDataset/train/cameras/ARG_CRO_220001.npz',
+    parser.add_argument("--npz_path", type=str, default='data/training-labels/coco-release.npz',
         help="Path to folder output folder.")
     parser.add_argument("--ind", type=int, default=0,
         help="index of npz file")
@@ -36,20 +33,14 @@ def load_smpl_model(model_folder, gender="neutral", num_betas=10):
 
 def load_data(npz_path, image_folder, ind):
     data = np.load(npz_path)
-    # img_path = os.path.join(image_folder, f"{ind:06d}.jpg")
-    # img_path = os.path.join(image_folder, data['imgname'][ind].replace('aic-train', 'aic-train-vitpose'))
-
-    # print(img_path)
-    # print(data.files)
-    # return {
-    #     "img_path": img_path,
-    #     "translations": data['trans_cam'][ind],
-    #     "camera_intrinsics": data['cam_int'][ind],
-    #     "pose": data['pose_cam'][ind],
-    #     "shape": data['shape'][ind],
-    # }
-
-    return data
+    img_path = os.path.join(image_folder, data['imgname'][ind].replace('aic-train', 'aic-train-vitpose'))
+    return {
+        "img_path": img_path,
+        "translations": data['trans_cam'][ind],
+        "camera_intrinsics": data['cam_int'][ind],
+        "pose": data['pose_cam'][ind],
+        "shape": data['shape'][ind],
+    }
 
 
 def render_model(renderer, model_output, img, outdir, file_name_suffix=""):
@@ -70,7 +61,6 @@ def main():
     MODEL_FOLDER = 'data/models/SMPL'
     IMAGE_FOLDER = args.image_folder
     NPZ_PATH = args.npz_path
-    CAMERA_NPZ_PATH = args.camera_npz_path
     OUTPUT_DIR = args.output_folder
     ind = args.ind
 
@@ -79,34 +69,28 @@ def main():
 
     # Load data from npz
     data = load_data(NPZ_PATH, IMAGE_FOLDER, ind)
-    camera_data = load_data(CAMERA_NPZ_PATH, IMAGE_FOLDER, ind)
+
     # Load image
-    img_path = os.path.join(IMAGE_FOLDER, f"{ind:06d}.jpg")
-    img = cv2.imread(img_path)
+    img = cv2.imread(data["img_path"])
     if img is None:
-        raise FileNotFoundError(f"Image not found: {img_path}")
-    print(f"Image loaded: {img_path}")
-    # img = cv2.imread("./data/training-images/COCO/images/coco_train_images/coco-train-2014/train2014/COCO_train2014_000000000036.jpg")
+        raise FileNotFoundError(f"Image not found: {data['img_path']}")
+    print(f"Image loaded: {data['img_path']}")
 
     img_h, img_w, _ = img.shape
 
-    player = 12
-    frame = 500
     # Extract parameters
-    translations = camera_data["t"][frame]
-    camera_intrinsics = camera_data["K"][frame]
-    pose = data["body_pose"][player][frame]
-    betas = data["betas"][player]
-    global_orient = data["global_orient"][player][frame]
+    translations = data["translations"]
+    camera_intrinsics = data["camera_intrinsics"]
+    pose = data["pose"]
+    shape = data["shape"]
 
     # Run SMPL model
     model_output = smpl_neutral(
-        betas=torch.tensor(betas).unsqueeze(0).float(),
-        global_orient=torch.tensor(global_orient).unsqueeze(0).float(),
-        body_pose=torch.tensor(pose).unsqueeze(0).float(),
+        betas=torch.tensor(shape).unsqueeze(0).float(),
+        global_orient=torch.tensor(pose[:3]).unsqueeze(0).float(),
+        body_pose=torch.tensor(pose[3:]).unsqueeze(0).float(),
         transl=torch.tensor(translations).unsqueeze(0),
     )
-    print(model_output)
 
     # Initialize renderer
     focal_length = camera_intrinsics[0, 0]
@@ -119,7 +103,7 @@ def main():
     )
 
     # Render and save overlay
-    render_model(renderer, model_output, img, OUTPUT_DIR, file_name_suffix=f"overlay_fifa_{ind}")
+    render_model(renderer, model_output, img, OUTPUT_DIR, file_name_suffix=f"overlay_coco_{ind}")
 
 if __name__ == "__main__":
     main()

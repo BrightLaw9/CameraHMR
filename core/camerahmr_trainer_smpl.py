@@ -28,6 +28,9 @@ from .constants import (
     REGRESSOR_H36M, VITPOSE_BACKBONE, SMPL_MODEL_DIR
 )
 
+import sys
+import gc
+
 log = get_pylogger(__name__)
 def scale_and_translation_transform_batch(P, T):
     P = P.detach().cpu().numpy()
@@ -119,6 +122,11 @@ class CameraHMR(pl.LightningModule):
     def forward_step(self, batch: Dict, train: bool = False) -> Dict:
         # Use RGB image as input
         x = batch['img']
+        # print("Batch image ", x)
+        # if (torch.isnan(x).any()):
+        #     print("NaN")
+        #     sys.exit()
+        
         batch_size = x.shape[0]
         
         # Compute conditioning features using the backbone
@@ -152,13 +160,17 @@ class CameraHMR(pl.LightningModule):
         bbox_info[:, 2] = (bbox_info[:, 2] / cam_intrinsics[:, 0, 0])  # [-1, 1]
 
         bbox_info = bbox_info.cuda().float()
+        # print("bbox", bbox_info)
+        # print("Verify", cx, img_w, cy, img_h, b, cam_intrinsics)
         pred_smpl_params, pred_cam, _, pred_kp = self.smpl_head(conditioning_feats, bbox_info=bbox_info)
 
         # Compute model vertices, joints and the projected joints
         pred_smpl_params['global_orient'] = pred_smpl_params['global_orient'].reshape(batch_size, -1, 3, 3)
         pred_smpl_params['body_pose'] = pred_smpl_params['body_pose'].reshape(batch_size, -1, 3, 3)
         pred_smpl_params['betas'] = pred_smpl_params['betas'].reshape(batch_size, -1)
+        # print("SMPL Train Params: ", pred_smpl_params.items())
         smpl_output = self.smpl_layer(**{k: v.float() for k,v in pred_smpl_params.items()}, pose2rot=False)
+        # print("SMPL Output: ", smpl_output.joints)
 
         if train:
             smpl_output_gt = self.smpl(**{k: v.float() for k,v in batch['smpl_params'].items()})
@@ -254,6 +266,7 @@ class CameraHMR(pl.LightningModule):
         pred_smpl_params = output['pred_smpl_params']
         pred_keypoints_2d = output['pred_keypoints_2d']
         pred_keypoints_3d = output['pred_keypoints_3d']
+        # print(pred_keypoints_3d)
 
         batch_size = pred_smpl_params['body_pose'].shape[0]
         device = pred_smpl_params['body_pose'].device
@@ -263,6 +276,7 @@ class CameraHMR(pl.LightningModule):
         gt_keypoints_3d = batch['keypoints_3d']
         gt_smpl_params = batch['smpl_params']
 
+        # print(gt_keypoints_3d)
 
         img_size = batch['img_size'].rot90().T.unsqueeze(1)
 
@@ -348,7 +362,8 @@ class CameraHMR(pl.LightningModule):
         losses = dict(loss=loss.detach(),
                       loss_keypoints_3d=loss_keypoints_3d.detach(),
                       loss_vertices=loss_vertices.detach(),
-                      loss_kp2d_cropped=loss_keypoints_2d_cropped.detach())
+                    #   loss_kp2d_cropped=loss_keypoints_2d_cropped.detach()
+                    )
         for k, v in loss_smpl_params.items():
             losses['loss_' + k] = v.detach()
 
@@ -393,10 +408,12 @@ class CameraHMR(pl.LightningModule):
    
 
     def validation_step(self, batch: Dict, batch_idx: int, dataloader_idx=0) -> Dict:
-
         batch_size = batch['img'].shape[0]
-        output,_ = self.forward_step(batch, train=False)
         dataset_names = batch['dataset']
+
+        # Run validation without tracking gradients to avoid growing the graph
+        with torch.no_grad():
+            output,_ = self.forward_step(batch, train=False)
 
         joint_mapper_h36m = H36M_TO_J14
         J_regressor_batch_smpl = self.J_regressor[None, :].expand(batch['img'].shape[0], -1, -1).float().cuda()
@@ -571,10 +588,10 @@ class CameraHMR(pl.LightningModule):
 
         joints2d = perspective_projection(
             output['pred_keypoints_3d'],
-            # rotation=torch.eye(3, device=device).unsqueeze(0).expand(batch_size, -1, -1),
-            # translation=cam_t,
-            rotation=batch['rotation'],
-            translation=batch['translation'],
+            rotation=torch.eye(3, device=device).unsqueeze(0).expand(batch_size, -1, -1),
+            translation=cam_t,
+            # rotation=batch['rotation'],
+            # translation=batch['translation'],
             cam_intrinsics=batch['cam_int'],
         )
 
@@ -596,6 +613,11 @@ class CameraHMR(pl.LightningModule):
         pck1 = torch.zeros(joints2d.shape)
         pck2 = torch.zeros(joints2d.shape)
 
+        # Store only aggregated statistics (means) to avoid keeping large per-sample
+        # tensors alive in Python lists which causes memory growth.
+        avgpck_005 = pck1.mean()
+        avgpck_01 = pck2.mean()
+
         # Absolute error (MPJPE)
         error = torch.sqrt(((pred_keypoints_3d - gt_keypoints_3d) ** 2).sum(dim=-1))
         error_verts = torch.sqrt(((pred_cam_vertices - gt_cam_vertices) ** 2).sum(dim=-1))
@@ -606,8 +628,9 @@ class CameraHMR(pl.LightningModule):
         val_pve = error_verts.mean(-1)*1000
         val_pampjpe = torch.tensor(r_error.mean(-1))*1000
 
-        avgpck_005 = pck1
-        avgpck_01 = pck2
+        # Ensure appended values are on CPU and detached from graph
+        avgpck_005 = avgpck_005.detach().cpu()
+        avgpck_01 = avgpck_01.detach().cpu()
         if 'coco' in dataset_names[0]:
             self.log('avgpck_0.05',avgpck_005.mean(), logger=True, sync_dist=True)
             self.log('avgpck_0.1',avgpck_01.mean(), logger=True, sync_dist=True)
@@ -617,10 +640,15 @@ class CameraHMR(pl.LightningModule):
             self.log('val_mpjpe',val_mpjpe.mean(), logger=True, sync_dist=True)
             self.log('val_pampjpe',val_pampjpe.mean(), logger=True, sync_dist=True)
 
-        self.validation_step_output.append({'val_loss': val_pve ,'val_loss_mpjpe': val_mpjpe, 'val_loss_pampjpe':val_pampjpe,  'avgpck_0.05':avgpck_005, 'avgpck_0.1':avgpck_01, 'dataloader_idx': dataloader_idx})
+        self.validation_step_output.append({'val_loss': val_pve.detach().cpu(), 'val_loss_mpjpe': val_mpjpe.detach().cpu(), 'val_loss_pampjpe': val_pampjpe.detach().cpu(), 'avgpck_0.05': avgpck_005, 'avgpck_0.1': avgpck_01, 'dataloader_idx': dataloader_idx})
 
+    def on_validation_epoch_start(self, dataloader_idx=0):
+        self.validation_step_output.clear()
+        # print("Starting validation with outputs: ", self.validation_step_output)
+        
     def on_validation_epoch_end(self, dataloader_idx=0):
         # Flatten outputs if it's a list of lists
+        # print(self.validation_step_output)
         outputs = self.validation_step_output
         if outputs and isinstance(outputs[0], list):
             outputs = [item for sublist in outputs for item in sublist]
@@ -644,6 +672,8 @@ class CameraHMR(pl.LightningModule):
                 logger.info('avgpck_0.1: '+str(dataloader_idx)+str(avg_pck_01_loss))
             if dataloader_idx==0:
                 self.log('val_loss',avg_val_loss, logger=True, sync_dist=True)
+        
+        self.validation_step_output.clear()
 
 
     def test_step(self, batch: Dict, batch_idx: int, dataloader_idx=0) -> Dict:

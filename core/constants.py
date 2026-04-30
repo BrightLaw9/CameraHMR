@@ -1,5 +1,8 @@
-CHECKPOINT_PATH='data/pretrained-models/camerahmr_checkpoint_cleaned.ckpt'
-#CHECKPOINT_PATH="logs/train/runs/train_run1/checkpoints/epoch=104-step=520000.ckpt"
+#CHECKPOINT_PATH='data/pretrained-models/camerahmr_checkpoint_cleaned.ckpt'
+# CHECKPOINT_PATH="logs/train/runs/train_run1/checkpoints/epoch=104-step=520000.ckpt"
+#CHECKPOINT_PATH="logs/train/runs/soccer_train/checkpoints/last.ckpt"
+# CHECKPOINT_PATH="logs/train/runs/soccer_train_new_2/checkpoints/epoch=13-step=135000.ckpt"
+CHECKPOINT_PATH="logs/train/runs/coco_train/checkpoints/epoch=8-step=40000.ckpt"
 CHECKPOINT_PATH_SMPLX='data/pretrained-models//bedlam_v1_v2.ckpt'
 CAM_MODEL_CKPT='data/pretrained-models/cam_model_cleaned.ckpt'
 DENSEKP_CKPT='data/pretrained-models/densekp.ckpt'
